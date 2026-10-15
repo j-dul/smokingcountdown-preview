@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Widget preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --line: #d3dae1;
+    --text: #1f2730;
+    --muted: #5a6875;
+    --accent: #2f6fb0;
+    --accent-ink: #ffffff;
+    --err-bg: #fbe9e5;
+    --err: #962a12;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d;
+      --surface: #1d232a;
+      --line: #313b45;
+      --text: #e6ebf0;
+      --muted: #97a6b3;
+      --accent: #84b6e8;
+      --accent-ink: #10202f;
+      --err-bg: #3a1f19;
+      --err: #f4a58f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181d;
+    --surface: #1d232a;
+    --line: #313b45;
+    --text: #e6ebf0;
+    --muted: #97a6b3;
+    --accent: #84b6e8;
+    --accent-ink: #10202f;
+    --err-bg: #3a1f19;
+    --err: #f4a58f;
+    color-scheme: dark;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 40px; }
+  header h1 {
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    line-height: 1.1;
+    margin: 0 0 6px;
+  }
+  header p { margin: 0 0 20px; color: var(--muted); max-width: 62ch; }
+  .grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+  .grid > section { min-width: 0; }
+  @media (min-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+
+  .stage {
+    border-radius: 28px;
+    padding: 36px 16px;
+    min-height: 260px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    transition: background .3s;
+  }
+  .stage[data-mode="light"] { background: linear-gradient(160deg, #b9d2e4, #ead6c2); }
+  .stage[data-mode="dark"]  { background: linear-gradient(160deg, #18242f, #3a2920); }
+  .scaler { transform-origin: top center; }
+  .meta { font-size: 13px; color: var(--muted); margin: 10px 4px 0; overflow-wrap: anywhere; }
+
+  .controls {
+    margin-top: 16px; padding: 16px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    display: grid; gap: 14px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .field-label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 6px; }
+  output { font-variant-numeric: tabular-nums; color: var(--muted); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  select, button {
+    font: inherit; font-size: 14px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 12px; cursor: pointer;
+  }
+  button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .code-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .code-head h2 { font-size: 16px; margin: 0; flex: 1; }
+  textarea {
+    width: 100%; height: 62vh; min-height: 320px; resize: vertical;
+    font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--text); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+    white-space: pre; overflow: auto; tab-size: 2;
+  }
+  .error {
+    margin-top: 10px; padding: 10px 14px; border-radius: 12px;
+    background: var(--err-bg); color: var(--err); font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .note { font-size: 13px; color: var(--muted); margin: 0; }
+  .nav { margin: -8px 0 20px !important; }
+  .nav a { color: var(--accent); font-weight: 600; }
+  .optional { border: 1px dashed var(--line); border-radius: 12px; padding: 12px; }
+  select:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Mock widget */
+  .w { display: flex; flex-direction: column; overflow: hidden; border-radius: 22px; position: relative; }
+  .w .t { min-width: 0; line-height: 1.2; overflow-wrap: break-word; }
+  .w .st { display: flex; min-width: 0; }
+  .w img { display: block; object-fit: contain; flex: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Widget preview</h1>
+    <p>Runs the Scriptable widget script in your browser with a stand-in for Scriptable's drawing and layout functions. Drag the date to watch the cigarette burn down, and edit the script on the right to try changes.</p>
+    <p class="nav"><a href="./">Open the page preview</a></p>
+  </header>
+
+  <main class="grid">
+    <section aria-label="Preview">
+      <div class="stage" id="stage" data-mode="light">
+        <div class="scaler" id="scaler"><div id="widget"></div></div>
+      </div>
+      <p class="meta" id="meta"></p>
+
+      <div class="controls">
+        <div>
+          <label class="field-label" for="day">Pretend it's <output id="dayOut"></output></label>
+          <input type="range" id="day" min="0" step="1">
+          <div class="row" style="margin-top:8px">
+            <button type="button" data-jump="today">Today</button>
+            <button type="button" data-jump="2027-06-01">Mid-2027</button>
+            <button type="button" data-jump="2028-01-01">Day before</button>
+            <button type="button" data-jump="2028-01-02">Quit day</button>
+            <button type="button" data-jump="2028-02-14">Six weeks after</button>
+          </div>
+        </div>
+        <div>
+          <label class="field-label" for="hour">Time <output id="hourOut"></output></label>
+          <input type="range" id="hour" min="0" max="23.75" step="0.25">
+        </div>
+        <div class="row">
+          <div style="flex:1; min-width:200px">
+            <label class="field-label" for="device">iPhone size</label>
+            <select id="device">
+              <option value="364x170">Plus / Pro Max (364 × 170)</option>
+              <option value="338x158" selected>Standard 6.1″ (338 × 158)</option>
+              <option value="329x155">Mini / X-era 5.8″ (329 × 155)</option>
+              <option value="321x148">SE 2nd/3rd gen (321 × 148)</option>
+            </select>
+          </div>
+          <div>
+            <span class="field-label" id="modeLabel">Wallpaper</span>
+            <div class="row" role="group" aria-labelledby="modeLabel">
+              <button type="button" data-mode="light" aria-pressed="true">Light</button>
+              <button type="button" data-mode="dark" aria-pressed="false">Dark</button>
+            </div>
+          </div>
+        </div>
+        <div class="optional">
+          <span class="field-label" id="locLabel">Optional weather &amp; seasonal sky</span>
+          <p class="note" style="margin-bottom:8px">Off by default. On her phone it only turns on if she chooses it from the script's menu and allows location; after that the location updates by itself. Here it pretends she's in Auckland.</p>
+          <div class="row">
+            <div class="row" role="group" aria-labelledby="locLabel">
+              <button type="button" data-loc="off" aria-pressed="true">Off</button>
+              <button type="button" data-loc="on" aria-pressed="false">On</button>
+            </div>
+            <select id="weather" aria-label="Pretend weather" disabled>
+              <option value="0">Clear</option>
+              <option value="2">Partly cloudy</option>
+              <option value="3">Overcast</option>
+              <option value="45">Fog</option>
+              <option value="53">Drizzle</option>
+              <option value="63">Rain</option>
+              <option value="73">Snow</option>
+              <option value="95">Thunderstorm</option>
+              <option value="offline">No internet</option>
+            </select>
+          </div>
+        </div>
+        <p class="note">Widget sizes are approximate. iOS draws text in SF Pro Rounded; this uses Nunito, so text widths will be close but not exact.</p>
+      </div>
+    </section>
+
+    <section aria-label="Script">
+      <div class="code-head">
+        <h2>Script</h2>
+        <button type="button" id="copy">Copy script</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Widget script"></textarea>
+      <div class="error" id="error" role="alert" hidden></div>
+    </section>
+  </main>
+</div>
+
+<script type="text/plain" id="original">// Búcsú a cigitől: home screen widget for Scriptable (medium size)
+// Keep START and TARGET the same as in index.html so the widget matches the page.
+//
+// OPTIONAL EXTRA: weather and seasonal sky. This is OFF unless she turns it on.
+// To turn it on or off, open Scriptable and tap this script: a menu explains what
+// it does and asks first. While it's off, her location is never requested, stored
+// or sent anywhere, and the widget uses a fixed daily sky schedule.
+
+const PAGE_URL = "https://j-dul.github.io/smokingcountdown/"
+const START  = new Date(2026, 9, 14)  // 14 Oct 2026 (months count from 0, so 9 = October)
+const TARGET = new Date(2028, 0, 2)   // 2 Jan 2028, midnight local time
+
+// Cigarette colours from the page. Text colours are set further down,
+// once we know how light or dark the sky behind them is.
+const C = {
+  paper:     new Color("#fbfbf8"),
+  edge:      new Color("#b9c0c5"),
+  filter:    new Color("#d9a066"),
+  filterDot: new Color("#c48a4f"),
+  ember:     new Color("#e4572e"),
+  ash:       new Color("#8e959b"),
+  smoke:     new Color("#8e959b", 0.55),
+}
+
+const DAY = 86400000
+const now = new Date()  // the phone's own clock and time zone
+const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+const daysLeft = Math.round((TARGET - today) / DAY)  // round() absorbs daylight-saving shifts
+const quit = daysLeft <= 0
+
+// How much paper is left: 1 on START, 0 on TARGET
+const fraction = Math.min(1, Math.max(0, (TARGET - now) / (TARGET - START)))
+
+
+// =====================================================================
+// Settings, stored only on this phone
+// =====================================================================
+const fm = FileManager.local()
+const SETTINGS_PATH = fm.joinPath(fm.documentsDirectory(), "bucsu-settings.json")
+
+function loadSettings() {
+  try {
+    if (fm.fileExists(SETTINGS_PATH)) return JSON.parse(fm.readString(SETTINGS_PATH))
+  } catch (e) {}
+  return { locationModule: false }
+}
+function saveSettings(s) { fm.writeString(SETTINGS_PATH, JSON.stringify(s)) }
+
+let settings = loadSettings()
+let showPreview = true
+
+
+// =====================================================================
+// Menu shown when the script is tapped inside the Scriptable app
+// (never shown in the widget itself)
+// =====================================================================
+async function notice(title, message) {
+  const a = new Alert()
+  a.title = title
+  a.message = message
+  a.addAction("OK")
+  await a.present()
+}
+
+const round1 = n => Math.round(n * 10) / 10  // about 10 km: enough for weather and sun times
+
+// Ask the phone where it is, but give up after a few seconds so the widget never hangs
+function withTimeout(promise, ms) {
+  if (typeof Timer === "undefined") return promise
+  return new Promise((resolve, reject) => {
+    const t = Timer.schedule(ms, false, () => reject(new Error("Location timed out")))
+    promise.then(v => { t.invalidate(); resolve(v) }, e => { t.invalidate(); reject(e) })
+  })
+}
+
+async function enableLocation(s) {
+  try {
+    Location.setAccuracyToThreeKilometers()
+    const loc = await Location.current()
+    const next = { locationModule: true, lat: round1(loc.latitude), lon: round1(loc.longitude), locTime: now.getTime(), weather: null }
+    saveSettings(next)
+    await notice("Turned on",
+      "Weather and seasonal sky are on. The widget keeps your location up to date by itself, so there's nothing else to do, even when you travel.")
+    return next
+  } catch (e) {
+    await notice("Location not shared",
+      "iOS didn't share your location, so this stays off. You can allow location for Scriptable in the Settings app and try again.")
+    return s
+  }
+}
+
+// Runs automatically in the widget: checks the location every couple of hours.
+// If iOS doesn't answer in time, the widget quietly keeps the last known location.
+async function refreshLocation(s) {
+  if (s.locTime && now - s.locTime < 2 * 3600000) return s
+  try {
+    Location.setAccuracyToThreeKilometers()
+    const loc = await withTimeout(Location.current(), 8000)
+    const lat = round1(loc.latitude), lon = round1(loc.longitude)
+    if (lat !== s.lat || lon !== s.lon) s.weather = null  // she's moved: fetch fresh weather
+    s.lat = lat
+    s.lon = lon
+    s.locTime = now.getTime()
+    saveSettings(s)
+  } catch (e) {}
+  return s
+}
+
+async function showMenu(s) {
+  const a = new Alert()
+  a.title = "Búcsú a cigitől"
+  if (s.locationModule) {
+    a.message = "Optional weather and seasonal sky: ON\n\n" +
+      "The widget uses your approximate location (to about 10 km) to match sunrise and sunset to the season and to show the current weather. " +
+      "It updates by itself every couple of hours, including when you travel. " +
+      "The location is kept only on this phone and is sent only to Open-Meteo, a free weather service, to look up the weather."
+    a.addAction("Preview widget")                                // 0
+    a.addDestructiveAction("Turn off and delete my location")    // 1
+  } else {
+    a.message = "Optional extra: weather and seasonal sky (OFF)\n\n" +
+      "If you turn this on, iOS will ask to share your approximate location (to about 10 km). " +
+      "The widget then matches sunrise and sunset to the season where you are and shows the current weather in the sky. " +
+      "Your location is kept only on this phone and is sent only to Open-Meteo, a free weather service. You can turn it off here at any time.\n\n" +
+      "The countdown works exactly the same either way."
+    a.addAction("Preview widget")                                // 0
+    a.addAction("Turn on weather & seasonal sky")                // 1
+  }
+  a.addCancelAction("Close")
+  const choice = await a.presentSheet()
+
+  if (choice === -1) { showPreview = false; return s }
+  if (choice === 1 && !s.locationModule) return await enableLocation(s)
+  if (choice === 1 && s.locationModule) {
+    const off = { locationModule: false }
+    saveSettings(off)
+    await notice("Turned off", "Your saved location and weather have been deleted. The widget is back to the standard sky.")
+    return off
+  }
+  return s
+}
+
+if (!config.runsInWidget) settings = await showMenu(settings)
+
+
+// =====================================================================
+// Sky colours through the day
+// =====================================================================
+// [top of the sky, horizon]. A clear sky is blue overhead and paler near the horizon;
+// warm colours only appear low down, in roughly the hour either side of sunrise and sunset.
+const NIGHT   = ["#0b1424", "#18263d"]
+const PREDAWN = ["#121d36", "#2e3a63"]
+const DAWN    = ["#9db4da", "#f3bf9e"]
+const MORNING = ["#b5d6ee", "#e2edf3"]
+const MIDDAY  = ["#a9d1ee", "#dcecf6"]
+const GOLDEN  = ["#9fc3e2", "#f5d3a4"]
+const SUNSET  = ["#6c80b3", "#f2925f"]
+const DUSK    = ["#232b52", "#4b3d68"]
+
+// Without location: a fixed schedule (sunrise 6:00, sunset 19:30).
+// With location: the same colours, anchored to that day's real sunrise and sunset.
+const DEFAULT_SUN = { sunrise: 6, sunset: 19.5 }
+
+function skyKeyframes(sun) {
+  const { sunrise, sunset } = sun
+  const pts = [
+    [0, NIGHT],
+    [sunrise - 1, PREDAWN],
+    [sunrise, DAWN],
+    [sunrise + 1, MORNING],
+    [(sunrise + sunset) / 2, MIDDAY],
+    [sunset - 2, MIDDAY],       // stays blue through the afternoon
+    [sunset - 0.75, GOLDEN],
+    [sunset, SUNSET],
+    [sunset + 1, DUSK],
+    [24, NIGHT],
+  ]
+  // Keep the points in order even for very short or very long days
+  for (let i = 1; i < pts.length - 1; i++) {
+    pts[i][0] = Math.min(Math.max(pts[i][0], pts[i - 1][0] + 0.1), 24 - (pts.length - 1 - i) * 0.1)
+  }
+  return pts
+}
+
+const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
+const rgbToHex = c => "#" + c.map(v => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")).join("")
+const mix = (a, b, t) => { const B = hexToRgb(b); return hexToRgb(a).map((v, i) => v + (B[i] - v) * t) }
+
+function skyAt(date, frames) {
+  const h = date.getHours() + date.getMinutes() / 60
+  let i = 0
+  while (h >= frames[i + 1][0]) i++
+  const [h0, [top0, bot0]] = frames[i], [h1, [top1, bot1]] = frames[i + 1]
+  const t = (h - h0) / (h1 - h0)
+  return [rgbToHex(mix(top0, top1, t)), rgbToHex(mix(bot0, bot1, t))]
+}
+
+// Approximate sunrise and sunset (within a few minutes) from latitude, longitude and date.
+// Times come back in the phone's local time zone.
+function sunTimes(date, lat, lon) {
+  const rad = Math.PI / 180
+  const y = date.getFullYear(), m = date.getMonth(), d = date.getDate()
+  const N = Math.round((Date.UTC(y, m, d) - Date.UTC(y, 0, 0)) / DAY)          // day of the year
+  const decl = -23.44 * Math.cos(2 * Math.PI / 365 * (N + 10)) * rad           // sun's declination
+  const B = 2 * Math.PI * (N - 81) / 364
+  const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B) // equation of time, minutes
+  const cosH = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(decl)) / (Math.cos(lat * rad) * Math.cos(decl))
+  if (cosH <= -1 || cosH >= 1) return null  // midnight sun or polar night: use the fixed schedule
+  const halfDay = Math.acos(cosH) / rad / 15                                   // hours from solar noon
+  const noonUTC = 12 - lon / 15 - eot / 60
+  const toLocal = h => { const t = new Date(Date.UTC(y, m, d) + h * 3600000); return t.getHours() + t.getMinutes() / 60 }
+  return { sunrise: toLocal(noonUTC - halfDay), sunset: toLocal(noonUTC + halfDay) }
+}
+
+
+// =====================================================================
+// Weather (only when the optional module is on)
+// =====================================================================
+async function getWeatherCode(s) {
+  const cached = s.weather
+  if (cached && now - cached.time < 25 * 60000) return cached.code
+  try {
+    const req = new Request(`https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lon}&current=weather_code&timezone=auto`)
+    req.timeoutInterval = 10
+    const json = await req.loadJSON()
+    const code = json.current.weather_code
+    s.weather = { code, time: now.getTime() }
+    saveSettings(s)
+    return code
+  } catch (e) {
+    // Offline: reuse the last reading if it's under 3 hours old, otherwise show no weather
+    return cached && now - cached.time < 3 * 3600000 ? cached.code : null
+  }
+}
+
+// Open-Meteo uses the standard WMO weather codes
+function weatherKind(code) {
+  if (code == null) return null
+  if (code === 0) return "clear"
+  if (code <= 2) return "partly"
+  if (code === 3) return "overcast"
+  if (code === 45 || code === 48) return "fog"
+  if (code >= 51 && code <= 57) return "drizzle"
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return "rain"
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow"
+  if (code >= 95) return "storm"
+  return null
+}
+
+// How much each kind of weather greys out the sky: [desaturate, darken] (negative darken lightens)
+const TINT = {
+  partly: [0.15, 0], overcast: [0.6, 0.05], fog: [0.65, -0.15], drizzle: [0.55, 0.08],
+  rain: [0.65, 0.15], snow: [0.5, -0.1], storm: [0.7, 0.35],
+}
+function tint(hex, kind) {
+  const t = TINT[kind]
+  if (!t) return hex
+  const [r, g, b] = hexToRgb(hex)
+  const grey = 0.3 * r + 0.59 * g + 0.11 * b
+  const des = [r, g, b].map(v => v + (grey - v) * t[0])
+  return rgbToHex(t[1] >= 0 ? des.map(v => v * (1 - t[1])) : des.map(v => v + (255 - v) * -t[1]))
+}
+
+// How the sun and moon show through each kind of weather: [disc opacity, glow strength, glow size].
+// Thicker cloud hides the disc and spreads its light into a wider, dimmer glow.
+const SKY_LIGHT = {
+  clear:    [1,    1,    1],
+  partly:   [1,    1,    1],     // clouds drift in front
+  fog:      [0.55, 0.25, 0.7],   // a pale, crisp disc with almost no glow
+  drizzle:  [0.2,  0.45, 1.6],
+  overcast: [0.15, 0.4,  1.8],   // mostly a brighter patch of cloud
+  snow:     [0.25, 0.45, 1.5],
+  rain:     [0.06, 0.35, 2],
+  storm:    [0,    0.18, 2.2],   // just a dim brighter patch behind the storm clouds
+}
+
+// Position on the arc across the sky: p = 0 at the left horizon, 1 at the right
+function arcPoint(p, W, H, r) {
+  const elev = Math.sin(Math.PI * p)                       // 1 at the top, 0 on the horizon
+  const horizon = H + r * 0.4, highest = H * 0.13
+  return {
+    x: W * (0.1 + 0.8 * p),
+    y: horizon - elev * (horizon - highest),
+    low: 1 - Math.max(0, Math.min(1, elev / 0.45)),        // 0 high up, 1 at the horizon
+  }
+}
+
+// Glow from stacked faint circles (drawn images can't use gradients), then the disc
+function drawLight(ctx, x, y, r, core, kind, rings, ringAlpha, spread) {
+  const [disc, glow, size] = SKY_LIGHT[kind] || SKY_LIGHT.clear
+  if (kind === "fog") core = rgbToHex(mix(core, "#ffffff", 0.6))
+  // Wider glows get more, fainter circles so they stay smooth instead of showing rings
+  const n = Math.max(rings, Math.round(rings * size * 2))
+  for (let i = n; i >= 1; i--) {
+    const rr = r + r * spread * size * i / n
+    ctx.setFillColor(new Color(core, ringAlpha * glow * rings / n))
+    ctx.fillEllipse(new Rect(x - rr, y - rr, rr * 2, rr * 2))
+  }
+  if (disc > 0) {
+    ctx.setFillColor(new Color(core, disc))
+    ctx.fillEllipse(new Rect(x - r, y - r, r * 2, r * 2))
+  }
+  return disc
+}
+
+// The sun, where the page would show it at this moment: it rises at the left, peaks at
+// midday and sinks off the bottom at sunset, turning orange as it gets low.
+function drawSun(ctx, W, H, kind) {
+  const p = (hourNow - sun.sunrise) / (sun.sunset - sun.sunrise)  // 0 at sunrise, 1 at sunset
+  if (p < -0.05 || p > 1.05) return
+  const r = 14
+  const { x, y, low } = arcPoint(p, W, H, r)
+  drawLight(ctx, x, y, r, rgbToHex(mix("#fff4d6", "#ff9a5a", low)), kind, 8, 0.07, 3.5)
+}
+
+// The moon: the sun's path in reverse. It rises at the left at sunset, peaks in the middle
+// of the night and sinks off the bottom at sunrise.
+function drawMoon(ctx, W, H, kind) {
+  const nightLen = 24 - sun.sunset + sun.sunrise
+  let t = hourNow - sun.sunset
+  if (t < 0) t += 24
+  let p = t / nightLen                       // 0 at sunset, 1 at sunrise
+  if (p > 1.05) p = (t - 24) / nightLen      // just before sunset, still below the horizon
+  if (p < -0.05 || p > 1.05) return
+  const r = 12
+  const { x, y, low } = arcPoint(p, W, H, r)
+  const disc = drawLight(ctx, x, y, r, rgbToHex(mix("#eef1f6", "#f3d9b5", low)), kind, 6, 0.045, 2.5)
+  if (disc > 0) {
+    // A few faint darker patches so it reads as the moon rather than a light
+    ctx.setFillColor(new Color("#b9c0cc", 0.35 * disc))
+    for (const [dx, dy, s] of [[-0.35, -0.25, 0.38], [0.2, 0.15, 0.3], [-0.05, 0.45, 0.2]]) {
+      ctx.fillEllipse(new Rect(x + dx * r - s * r, y + dy * r - s * r, s * r * 2, s * r * 2))
+    }
+  }
+}
+
+// Widgets can't animate, so the sky, sun, moon and weather are drawn as a still scene behind everything
+function drawSky(top, bottom, kind, isNight) {
+  const W = 364, H = 170
+  const ctx = new DrawContext()
+  ctx.size = new Size(W, H)
+  ctx.opaque = true
+  ctx.respectScreenScale = true
+
+  for (let y = 0; y < H; y++) {
+    ctx.setFillColor(new Color(rgbToHex(mix(top, bottom, y / (H - 1)))))
+    ctx.fillRect(new Rect(0, y, W, 1.5))
+  }
+
+  let seed = 7  // fixed seed so the scene doesn't jump around between refreshes
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  const glow = isNight ? 0.5 : 1
+
+  if (isNight && (kind === "clear" || kind === "partly")) {
+    for (let i = 0; i < 40; i++) {
+      const r = 0.6 + rnd() * 1.1
+      ctx.setFillColor(new Color("#ffffff", 0.4 + rnd() * 0.5))
+      ctx.fillEllipse(new Rect(rnd() * W, rnd() * H * 0.7, r, r))
+    }
+  }
+
+  drawSun(ctx, W, H, kind)   // before the clouds, so they pass in front
+  drawMoon(ctx, W, H, kind)
+
+  if (kind === "partly" || kind === "overcast") {
+    const clouds = kind === "partly" ? [[230, 18, 1], [300, 40, 0.8], [150, 8, 0.7]] : [[40, 10, 1.2], [200, 4, 1.4], [310, 30, 1]]
+    // Solid colour (sky blended with white) so overlapping puffs don't show darker seams
+    const cloudHex = rgbToHex(mix(rgbToHex(mix(top, bottom, 0.15)), "#ffffff", (kind === "partly" ? 0.35 : 0.15) * glow))
+    ctx.setFillColor(new Color(cloudHex))
+    for (const [x, y, s] of clouds) {
+      for (const [dx, dy, w, h] of [[0, 10, 60, 22], [14, 0, 34, 28], [34, 6, 30, 24]]) {
+        ctx.fillEllipse(new Rect(x + dx * s, y + dy * s, w * s, h * s))
+      }
+    }
+  }
+
+  if (kind === "fog") {
+    ctx.setFillColor(new Color("#ffffff", 0.14 * glow))
+    for (let i = 0; i < 5; i++) {
+      const band = new Path()
+      band.addRoundedRect(new Rect(-20 + rnd() * 60, 20 + i * 30, W * (0.6 + rnd() * 0.4), 14), 7, 7)
+      ctx.addPath(band)
+      ctx.fillPath()
+    }
+  }
+
+  if (kind === "drizzle" || kind === "rain" || kind === "storm") {
+    const count = kind === "drizzle" ? 35 : kind === "rain" ? 70 : 90
+    const len = kind === "drizzle" ? 7 : 12
+    const rain = new Path()
+    for (let i = 0; i < count; i++) {
+      const x = rnd() * (W + 20), y = rnd() * H
+      rain.move(new Point(x, y))
+      rain.addLine(new Point(x - len / 3, y + len))
+    }
+    ctx.addPath(rain)
+    ctx.setStrokeColor(new Color("#ffffff", 0.35 * glow))
+    ctx.setLineWidth(1.2)
+    ctx.strokePath()
+  }
+
+  if (kind === "storm") {
+    // A new bolt in a new spot each refresh. It stays in the open sky along the top:
+    // right of the title and above the cigarette, so it never covers the text or the tip.
+    const x0 = 190 + Math.random() * 150, bottom = 34 + Math.random() * 10
+    const pts = [new Point(x0, -2)]
+    let x = x0
+    for (let i = 1; i <= 4; i++) {
+      x += (i % 2 ? 1 : -1) * (4 + Math.random() * 6) + (Math.random() - 0.5) * 4
+      pts.push(new Point(x, -2 + (bottom + 2) * i / 4))
+    }
+    const forkFrom = pts[2], forkDir = Math.random() < 0.5 ? -1 : 1
+    const stroke = (width, alpha) => {
+      const path = new Path()
+      path.addLines(pts)
+      path.move(forkFrom)
+      path.addLine(new Point(forkFrom.x + forkDir * 9, forkFrom.y + 6))
+      path.addLine(new Point(forkFrom.x + forkDir * 13, forkFrom.y + 13))
+      ctx.addPath(path)
+      ctx.setStrokeColor(new Color("#fff2a8", alpha))
+      ctx.setLineWidth(width)
+      ctx.strokePath()
+    }
+    stroke(7, 0.2)     // glow
+    stroke(2.2, 0.95)  // bolt
+  }
+
+  if (kind === "snow") {
+    for (let i = 0; i < 50; i++) {
+      const r = 1.5 + rnd() * 2
+      ctx.setFillColor(new Color("#ffffff", 0.75 * (isNight ? 0.7 : 1)))
+      ctx.fillEllipse(new Rect(rnd() * W, rnd() * H, r, r))
+    }
+  }
+
+  return ctx.getImage()
+}
+
+
+// =====================================================================
+// Work out today's sky
+// =====================================================================
+let sun = DEFAULT_SUN
+let kind = null
+let weatherCode = null
+if (settings.locationModule) settings = await refreshLocation(settings)
+if (settings.locationModule && settings.lat != null) {
+  sun = sunTimes(now, settings.lat, settings.lon) || DEFAULT_SUN
+  weatherCode = await getWeatherCode(settings)
+  kind = weatherKind(weatherCode)
+}
+const [baseTop, baseBottom] = skyAt(now, skyKeyframes(sun))
+const skyTop = tint(baseTop, kind), skyBottom = tint(baseBottom, kind)
+const hourNow = now.getHours() + now.getMinutes() / 60
+const isNight = hourNow < sun.sunrise || hourNow > sun.sunset
+
+// Pick dark or light text, whichever stays more readable against both ends of the sky
+function luminance(hex) {
+  const [r, g, b] = hexToRgb(hex).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+const contrast = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+const DARK_TEXT = "#1b2a3a", LIGHT_TEXT = "#f2f5f8"
+const worst = text => Math.min(contrast(luminance(text), luminance(skyTop)), contrast(luminance(text), luminance(skyBottom)))
+const textHex = worst(DARK_TEXT) >= worst(LIGHT_TEXT) ? DARK_TEXT : LIGHT_TEXT
+C.ink = new Color(textHex)
+C.muted = new Color(textHex, 0.75)
+
+
+// =====================================================================
+// Cigarette drawing
+// =====================================================================
+function drawCigarette(f) {
+  const W = 280, H = 44
+  const ctx = new DrawContext()
+  ctx.size = new Size(W, H)
+  ctx.opaque = false
+  ctx.respectScreenScale = true
+
+  const x0 = 2, filterW = 56, tipSpace = 34
+  const bodyH = 18, y = 20                  // sits low to leave room for smoke
+  const maxPaper = W - x0 - filterW - tipSpace
+  const paperStart = x0 + filterW
+  const paperEnd = paperStart + maxPaper * f
+
+  // Paper
+  if (paperEnd > paperStart) {
+    const paperRect = new Rect(paperStart, y, paperEnd - paperStart, bodyH)
+    ctx.setFillColor(C.paper)
+    ctx.fillRect(paperRect)
+    ctx.setStrokeColor(C.edge)
+    ctx.setLineWidth(1)
+    ctx.strokeRect(paperRect)
+  }
+
+  // Ember, then ash at the tip
+  ctx.setFillColor(C.ember)
+  ctx.fillRect(new Rect(paperEnd, y, 4, bodyH))
+  const ash = new Path()
+  ash.addRoundedRect(new Rect(paperEnd + 4, y + 1, 6, bodyH - 2), 2, 2)
+  ctx.addPath(ash)
+  ctx.setFillColor(C.ash)
+  ctx.fillPath()
+
+  // Filter with speckles (fixed positions so it doesn't flicker between refreshes)
+  const filter = new Path()
+  filter.addRoundedRect(new Rect(x0, y, filterW, bodyH), 4, 4)
+  ctx.addPath(filter)
+  ctx.setFillColor(C.filter)
+  ctx.fillPath()
+  ctx.setFillColor(C.filterDot)
+  for (let i = 0; i < 10; i++) {
+    const dx = 6 + (i * 23) % (filterW - 12)
+    const dy = 4 + (i * 11) % (bodyH - 8)
+    ctx.fillEllipse(new Rect(x0 + dx, y + dy, 2.5, 2.5))
+  }
+
+  // Two still wisps of smoke rising from the tip
+  const tipX = paperEnd + 10, tipY = y + bodyH / 2
+  ctx.setStrokeColor(C.smoke)
+  ctx.setLineWidth(2)
+  const s1 = new Path()
+  s1.move(new Point(tipX, tipY))
+  s1.addCurve(new Point(tipX + 12, 2), new Point(tipX + 16, tipY - 6), new Point(tipX, 12))
+  ctx.addPath(s1)
+  ctx.strokePath()
+  ctx.setLineWidth(1.5)
+  const s2 = new Path()
+  s2.move(new Point(tipX + 2, tipY - 2))
+  s2.addCurve(new Point(tipX + 20, 6), new Point(tipX + 6, tipY - 10), new Point(tipX + 22, 14))
+  ctx.addPath(s2)
+  ctx.strokePath()
+
+  return ctx.getImage()
+}
+
+function addCount(stack, number, label, size) {
+  stack.bottomAlignContent()
+  const n = stack.addText(String(number))
+  n.font = Font.heavyRoundedSystemFont(size)
+  n.textColor = C.ink
+  stack.addSpacer(6)
+  const l = stack.addText(label)
+  l.font = Font.mediumRoundedSystemFont(15)
+  l.textColor = C.muted
+  stack.addSpacer()  // pushes the row to the left edge (stacks are centred otherwise)
+}
+
+
+// =====================================================================
+// Build the widget
+// =====================================================================
+const w = new ListWidget()
+w.backgroundImage = drawSky(skyTop, skyBottom, kind, isNight)
+w.setPadding(14, 16, 12, 16)
+// Tapping the widget opens the page. With the optional module on, the rounded location and
+// current weather ride along after "#", which stays on the phone and is never sent to GitHub.
+// With it off, the link is plain and nothing about her location is included.
+let link = PAGE_URL
+if (settings.locationModule && settings.lat != null) {
+  link += `#lat=${settings.lat}&lon=${settings.lon}` + (weatherCode != null ? `&w=${weatherCode}` : "")
+}
+w.url = link
+
+const title = w.addText("Búcsú a cigitől")
+title.font = Font.semiboldRoundedSystemFont(14)
+title.textColor = C.muted
+
+w.addSpacer()
+
+if (!quit) {
+  const img = w.addImage(drawCigarette(fraction))
+  img.imageSize = new Size(280, 44)
+  img.leftAlignImage()
+  w.addSpacer()
+  addCount(w.addStack(), daysLeft, "nap van hátra", 34)          // "X days left"
+} else {
+  const since = -daysLeft
+  if (since === 0) {
+    const t = w.addText("Az első füstmentes nap")                // "The first smoke-free day"
+    t.font = Font.heavyRoundedSystemFont(24)
+    t.textColor = C.ink
+  } else {
+    addCount(w.addStack(), since, "napja füstmentes", 40)       // "smoke-free for X days"
+  }
+  w.addSpacer()
+}
+
+// Ask iOS to refresh every 30 minutes so the sky keeps up, and just after midnight so the
+// day count flips. iOS treats this as a request and may refresh less often.
+const nextMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 0, 1)
+w.refreshAfterDate = new Date(Math.min(nextMidnight.getTime(), now.getTime() + 30 * 60000))
+
+if (config.runsInWidget) {
+  Script.setWidget(w)
+} else if (showPreview) {
+  await w.presentMedium()  // preview when run inside the Scriptable app
+}
+Script.complete()
+</script>
+
+<script>
+(() => {
+  let MODE = "light";
+
+  // ---------- Mock Scriptable API ----------
+  class Color {
+    constructor(hex, alpha = 1) { this.hex = String(hex).replace("#", ""); this.alpha = alpha; }
+    static dynamic(light, dark) { const c = new Color("000000"); c._dyn = { light, dark }; return c; }
+    static white() { return new Color("ffffff"); }
+    static black() { return new Color("000000"); }
+    static clear() { return new Color("000000", 0); }
+    static gray() { return new Color("8e8e93"); }
+    css() {
+      if (this._dyn) return (MODE === "dark" ? this._dyn.dark : this._dyn.light).css();
+      let h = this.hex;
+      if (h.length === 3) h = h.split("").map(x => x + x).join("");
+      let a = this.alpha;
+      if (h.length === 8) { a *= parseInt(h.slice(6, 8), 16) / 255; h = h.slice(0, 6); }
+      const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+  }
+  class Size { constructor(width, height) { this.width = width; this.height = height; } }
+  class Point { constructor(x, y) { this.x = x; this.y = y; } }
+  class Rect {
+    constructor(x, y, width, height) { this.x = x; this.y = y; this.width = width; this.height = height; }
+    get minX() { return this.x; } get minY() { return this.y; }
+    get maxX() { return this.x + this.width; } get maxY() { return this.y + this.height; }
+    get size() { return new Size(this.width, this.height); }
+    get origin() { return new Point(this.x, this.y); }
+  }
+
+  class Font {
+    constructor(name, size, weight = 400, family = "system") { this.name = name; this.size = size; this.weight = weight; this.family = family; }
+    css() {
+      const fam = this.family === "rounded" ? `"Nunito", ui-rounded, "SF Pro Rounded", system-ui, sans-serif`
+        : this.family === "mono" ? `ui-monospace, "SF Mono", Menlo, monospace`
+        : `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+      return `${this.weight} ${this.size}px ${fam}`;
+    }
+  }
+  const WEIGHTS = { ultraLight: 200, thin: 100, light: 300, regular: 400, medium: 500, semibold: 600, bold: 700, heavy: 800, black: 900 };
+  for (const [name, w] of Object.entries(WEIGHTS)) {
+    Font[name + "SystemFont"] = s => new Font(name, s, w);
+    Font[name + "RoundedSystemFont"] = s => new Font(name, s, w, "rounded");
+    Font[name + "MonospacedSystemFont"] = s => new Font(name, s, w, "mono");
+  }
+  Font.systemFont = s => new Font("system", s, 400);
+  Font.italicSystemFont = s => new Font("italic", s, 400);
+  ["body", "headline", "title1", "title2", "title3", "caption1", "caption2", "footnote", "subheadline", "callout", "largeTitle"].forEach((n, i) => {
+    const sizes = { body: 17, headline: 17, title1: 28, title2: 22, title3: 20, caption1: 12, caption2: 11, footnote: 13, subheadline: 15, callout: 16, largeTitle: 34 };
+    Font[n] = () => new Font(n, sizes[n], n === "headline" ? 600 : 400);
+  });
+
+  class Path {
+    constructor() { this.ops = []; }
+    move(p) { this.ops.push(c => c.moveTo(p.x, p.y)); }
+    addLine(p) { this.ops.push(c => c.lineTo(p.x, p.y)); }
+    addCurve(p, c1, c2) { this.ops.push(c => c.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, p.x, p.y)); }
+    addQuadCurve(p, cp) { this.ops.push(c => c.quadraticCurveTo(cp.x, cp.y, p.x, p.y)); }
+    addRect(r) { this.ops.push(c => c.rect(r.x, r.y, r.width, r.height)); }
+    addRoundedRect(r, cw, ch) { this.ops.push(c => c.roundRect ? c.roundRect(r.x, r.y, r.width, r.height, Math.min(cw, ch)) : c.rect(r.x, r.y, r.width, r.height)); }
+    addEllipse(r) { this.ops.push(c => c.ellipse(r.x + r.width / 2, r.y + r.height / 2, r.width / 2, r.height / 2, 0, 0, Math.PI * 2)); }
+    addLines(pts) { pts.forEach((p, i) => i ? this.addLine(p) : this.move(p)); }
+    closeSubpath() { this.ops.push(c => c.closePath()); }
+  }
+
+  class DrawContext {
+    constructor() { this.size = new Size(200, 200); this.opaque = true; this.respectScreenScale = false; this._c = null; this._path = null; this._textColor = Color.black(); this._font = Font.systemFont(17); this._align = "left"; }
+    _ctx() {
+      if (!this._c) {
+        const s = this.respectScreenScale ? 3 : 1;
+        const cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(this.size.width * s));
+        cv.height = Math.max(1, Math.round(this.size.height * s));
+        this._cv = cv; this._c = cv.getContext("2d"); this._c.scale(s, s);
+        if (this.opaque) { this._c.fillStyle = "#fff"; this._c.fillRect(0, 0, this.size.width, this.size.height); }
+      }
+      return this._c;
+    }
+    setFillColor(c) { this._ctx().fillStyle = c.css(); }
+    setStrokeColor(c) { this._ctx().strokeStyle = c.css(); }
+    setLineWidth(w) { this._ctx().lineWidth = w; }
+    fillRect(r) { this._ctx().fillRect(r.x, r.y, r.width, r.height); }
+    strokeRect(r) { this._ctx().strokeRect(r.x, r.y, r.width, r.height); }
+    fillEllipse(r) { const c = this._ctx(); c.beginPath(); c.ellipse(r.x + r.width / 2, r.y + r.height / 2, r.width / 2, r.height / 2, 0, 0, Math.PI * 2); c.fill(); }
+    strokeEllipse(r) { const c = this._ctx(); c.beginPath(); c.ellipse(r.x + r.width / 2, r.y + r.height / 2, r.width / 2, r.height / 2, 0, 0, Math.PI * 2); c.stroke(); }
+    addPath(p) { this._path = p; }
+    _trace() { const c = this._ctx(); c.beginPath(); if (this._path) this._path.ops.forEach(op => op(c)); return c; }
+    fillPath() { this._trace().fill(); }
+    strokePath() { const c = this._trace(); c.lineCap = "round"; c.stroke(); }
+    setFont(f) { this._font = f; }
+    setTextColor(c) { this._textColor = c; }
+    setTextAlignedLeft() { this._align = "left"; }
+    setTextAlignedCenter() { this._align = "center"; }
+    setTextAlignedRight() { this._align = "right"; }
+    drawText(t, p) { const c = this._ctx(); c.font = this._font.css(); c.fillStyle = this._textColor.css(); c.textBaseline = "top"; c.textAlign = "left"; c.fillText(t, p.x, p.y); }
+    drawTextInRect(t, r) { const c = this._ctx(); c.font = this._font.css(); c.fillStyle = this._textColor.css(); c.textBaseline = "top"; c.textAlign = this._align; const x = this._align === "center" ? r.x + r.width / 2 : this._align === "right" ? r.maxX : r.x; c.fillText(t, x, r.y, r.width); }
+    drawImageInRect(img, r) { const c = this._ctx(); if (img._el) c.drawImage(img._el, r.x, r.y, r.width, r.height); }
+    getImage() { this._ctx(); const el = this._cv; return { _el: el, src: el.toDataURL(), size: new Size(this.size.width, this.size.height) }; }
+  }
+
+  class Spacer { constructor(length) { this.length = length; } }
+  class WidgetText {
+    constructor(text) { this.text = String(text); this.font = null; this.textColor = null; this.textOpacity = 1; this.lineLimit = 0; this._align = "left"; this.minimumScaleFactor = 1; this.shadowColor = null; }
+    leftAlignText() { this._align = "left"; } centerAlignText() { this._align = "center"; } rightAlignText() { this._align = "right"; }
+  }
+  class WidgetDate extends WidgetText {
+    constructor(date) { super(""); this.date = date; this._style = "date"; }
+    applyTimerStyle() { this._style = "timer"; } applyRelativeStyle() { this._style = "relative"; } applyOffsetStyle() { this._style = "offset"; }
+    applyDateStyle() { this._style = "date"; } applyTimeStyle() { this._style = "time"; }
+  }
+  class WidgetImage {
+    constructor(img) { this.image = img; this.imageSize = null; this._align = "center"; this.cornerRadius = 0; this.imageOpacity = 1; this.resizable = true; this.tintColor = null; }
+    leftAlignImage() { this._align = "left"; } centerAlignImage() { this._align = "center"; } rightAlignImage() { this._align = "right"; }
+    applyFittingContentMode() {} applyFillingContentMode() {}
+  }
+  class Container {
+    constructor() { this.children = []; this.backgroundColor = null; this._padding = null; this.url = null; }
+    addText(t) { const x = new WidgetText(t); this.children.push(x); return x; }
+    addDate(d) { const x = new WidgetDate(d); this.children.push(x); return x; }
+    addImage(i) { const x = new WidgetImage(i); this.children.push(x); return x; }
+    addSpacer(n) { const x = new Spacer(n); this.children.push(x); return x; }
+    addStack() { const x = new WidgetStack(); this.children.push(x); return x; }
+    setPadding(t, l, b, r) { this._padding = [t, l, b, r]; }
+    useDefaultPadding() { this._padding = null; }
+  }
+  class WidgetStack extends Container {
+    constructor() { super(); this._dir = "row"; this._align = "center"; this.spacing = 0; this.cornerRadius = 0; this.size = null; this.borderWidth = 0; this.borderColor = null; }
+    layoutHorizontally() { this._dir = "row"; } layoutVertically() { this._dir = "column"; }
+    topAlignContent() { this._align = "flex-start"; } centerAlignContent() { this._align = "center"; } bottomAlignContent() { this._align = "flex-end"; }
+  }
+  let lastWidget = null, presented = null;
+  class ListWidget extends Container {
+    constructor() { super(); this.refreshAfterDate = null; this.spacing = 0; this.backgroundGradient = null; this.backgroundImage = null; lastWidget = this; }
+    async presentSmall() { presented = this; } async presentMedium() { presented = this; } async presentLarge() { presented = this; }
+  }
+  // Pretend phone storage, location, network and dialogs
+  let FILES = {};
+  const FileManager = {
+    local: () => ({
+      documentsDirectory: () => "/Documents",
+      joinPath: (a, b) => a + "/" + b,
+      fileExists: p => p in FILES,
+      readString: p => FILES[p],
+      writeString: (p, v) => { FILES[p] = v; },
+      remove: p => { delete FILES[p]; },
+    }),
+  };
+  FileManager.iCloud = FileManager.local;
+  const Location = {
+    setAccuracyToThreeKilometers() {}, setAccuracyToKilometer() {}, setAccuracyToHundredMeters() {}, setAccuracyToBest() {},
+    current: async () => ({ latitude: -36.85, longitude: 174.76 }),
+  };
+  let WEATHER = "0", lastRequestUrl = null;
+  class Request {
+    constructor(url) { this.url = url; this.timeoutInterval = 60; }
+    async loadJSON() {
+      lastRequestUrl = this.url;
+      if (WEATHER === "offline") { lastRequestUrl = "failed"; throw new Error("The Internet connection appears to be offline."); }
+      return { current: { weather_code: +WEATHER } };
+    }
+  }
+  const Timer = {
+    schedule(ms, repeats, fn) { const id = (repeats ? setInterval : setTimeout)(fn, ms); return { invalidate: () => { clearTimeout(id); clearInterval(id); } }; },
+  };
+  class Alert {
+    constructor() { this.title = ""; this.message = ""; }
+    addAction() {} addDestructiveAction() {} addCancelAction() {} addTextField() {}
+    async present() { return 0; } async presentSheet() { return 0; } async presentAlert() { return 0; }
+  }
+  class LinearGradient { constructor() { this.colors = []; this.locations = []; this.startPoint = new Point(0, 0); this.endPoint = new Point(0, 1); } }
+
+  // ---------- Renderer ----------
+  const dflt = () => (MODE === "dark" ? "#ffffff" : "#000000");
+  function hasFlexSpacer(s) { return s.children.some(c => c instanceof Spacer && c.length == null); }
+  const SELF = { left: "flex-start", center: "center", right: "flex-end" };
+
+  function fmtDate(d, style, now) {
+    if (style === "timer") {
+      let s = Math.abs(Math.floor((d - now) / 1000));
+      const h = Math.floor(s / 3600); s -= h * 3600; const m = Math.floor(s / 60); s -= m * 60;
+      return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+    if (style === "time") return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (style === "relative" || style === "offset") {
+      const days = Math.round((d - now) / 86400000);
+      return style === "offset" ? `${days >= 0 ? "+" : ""}${days} days` : `${Math.abs(days)} days`;
+    }
+    return d.toLocaleDateString();
+  }
+
+  function renderNode(node, parentDir, now) {
+    if (node instanceof Spacer) {
+      const d = document.createElement("div");
+      d.style.flex = node.length == null ? "1 1 0" : `0 0 ${node.length}px`;
+      d.style.minWidth = "0"; d.style.minHeight = "0";
+      return d;
+    }
+    if (node instanceof WidgetText) {
+      const d = document.createElement("div");
+      d.className = "t";
+      d.textContent = node instanceof WidgetDate ? fmtDate(node.date, node._style, now) : node.text;
+      const f = node.font || Font.body();
+      d.style.font = f.css();
+      d.style.lineHeight = "1.2";
+      d.style.color = node.textColor ? node.textColor.css() : dflt();
+      d.style.opacity = node.textOpacity;
+      d.style.textAlign = node._align;
+      if (node.lineLimit > 0) { d.style.display = "-webkit-box"; d.style.webkitLineClamp = node.lineLimit; d.style.webkitBoxOrient = "vertical"; d.style.overflow = "hidden"; }
+      if (parentDir === "column") d.style.alignSelf = "stretch";
+      return d;
+    }
+    if (node instanceof WidgetImage) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = node.image && node.image.src ? node.image.src : "";
+      const sz = node.imageSize || (node.image && node.image.size);
+      if (sz) { img.style.width = sz.width + "px"; img.style.height = sz.height + "px"; }
+      img.style.borderRadius = node.cornerRadius + "px";
+      img.style.opacity = node.imageOpacity;
+      if (parentDir === "column") img.style.alignSelf = SELF[node._align];
+      return img;
+    }
+    if (node instanceof WidgetStack) {
+      const d = document.createElement("div");
+      d.className = "st";
+      d.style.flexDirection = node._dir;
+      d.style.alignItems = node._align;
+      d.style.gap = (node.spacing || 0) + "px";
+      if (node._padding) { const p = node._padding; d.style.padding = `${p[0]}px ${p[3]}px ${p[2]}px ${p[1]}px`; }
+      if (node.backgroundColor) d.style.background = node.backgroundColor.css();
+      if (node.cornerRadius) d.style.borderRadius = node.cornerRadius + "px";
+      if (node.borderWidth && node.borderColor) d.style.border = `${node.borderWidth}px solid ${node.borderColor.css()}`;
+      if (node.size && node.size.width) d.style.width = node.size.width + "px";
+      if (node.size && node.size.height) d.style.height = node.size.height + "px";
+      if (parentDir === "column") d.style.alignSelf = hasFlexSpacer(node) && node._dir === "row" ? "stretch" : "center";
+      else if (hasFlexSpacer(node) && node._dir === "column") d.style.alignSelf = "stretch";
+      if (hasFlexSpacer(node)) d.style.flex = "1 1 auto";
+      node.children.forEach(c => d.appendChild(renderNode(c, node._dir, now)));
+      return d;
+    }
+    return document.createElement("div");
+  }
+
+  function renderWidget(w, W, H, now) {
+    const el = document.createElement("div");
+    el.className = "w";
+    el.style.width = W + "px"; el.style.height = H + "px";
+    if (w.backgroundImage && w.backgroundImage.src) {
+      el.style.background = `center / cover no-repeat url(${w.backgroundImage.src})`;
+    } else if (w.backgroundGradient && w.backgroundGradient.colors.length) {
+      const g = w.backgroundGradient;
+      const ang = Math.atan2(g.endPoint.x - g.startPoint.x, -(g.endPoint.y - g.startPoint.y)) * 180 / Math.PI;
+      el.style.background = `linear-gradient(${ang}deg, ${g.colors.map((c, i) => c.css() + (g.locations[i] != null ? ` ${g.locations[i] * 100}%` : "")).join(", ")})`;
+    } else {
+      el.style.background = w.backgroundColor ? w.backgroundColor.css() : (MODE === "dark" ? "#1c1c1e" : "#ffffff");
+    }
+    const p = w._padding || [16, 16, 16, 16];
+    el.style.padding = `${p[0]}px ${p[3]}px ${p[2]}px ${p[1]}px`;
+    el.style.gap = (w.spacing || 0) + "px";
+    w.children.forEach(c => el.appendChild(renderNode(c, "column", now)));
+    return el;
+  }
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const ORIGINAL = $("original").textContent.replace(/^\n/, "");
+  const code = $("code"), slider = $("day"), stage = $("stage"), scaler = $("scaler"), host = $("widget");
+  const RANGE_START = new Date(2026, 9, 1, 12), RANGE_END = new Date(2028, 3, 1, 12);
+  const DAY = 86400000;
+  slider.max = Math.round((RANGE_END - RANGE_START) / DAY);
+  const dayFor = d => Math.max(0, Math.min(+slider.max, Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12) - RANGE_START) / DAY)));
+  const dateFor = n => new Date(RANGE_START.getFullYear(), RANGE_START.getMonth(), RANGE_START.getDate() + n, 12);
+  slider.value = dayFor(new Date());
+  const hourSlider = $("hour");
+  const nowHour = () => { const d = new Date(); return Math.round((d.getHours() + d.getMinutes() / 60) * 4) / 4 % 24; };
+  hourSlider.value = nowHour();
+  code.value = ORIGINAL;
+
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  let runId = 0;
+
+  async function run() {
+    const id = ++runId;
+    const h = +hourSlider.value;
+    const simDay = dateFor(+slider.value);
+    simDay.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+    const nowMs = simDay.getTime();
+    $("hourOut").textContent = simDay.toLocaleTimeString("en-NZ", { hour: "numeric", minute: "2-digit" });
+    $("dayOut").textContent = new Date(nowMs).toLocaleDateString("en-NZ", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+    class SimDate extends Date {
+      constructor(...a) { if (a.length === 0) super(nowMs); else super(...a); }
+      static now() { return nowMs; }
+    }
+    lastWidget = null; presented = null; lastRequestUrl = null;
+    FILES = LOC_ON ? { "/Documents/bucsu-settings.json": JSON.stringify({ locationModule: true, lat: -36.8, lon: 174.8, weather: null }) } : {};
+    let set = null;
+    const Script = { setWidget(w) { set = w; }, complete() {}, name() { return "Búcsú"; } };
+    const config = { runsInWidget: true, widgetFamily: "medium", runsInApp: false, runsWithSiri: false };
+    const Device = { isUsingDarkAppearance: () => MODE === "dark", locale: () => "en_NZ", language: () => "en" };
+    const errBox = $("error");
+    try {
+      const fn = new AsyncFunction("ListWidget", "DrawContext", "Color", "Font", "Size", "Point", "Rect", "Path", "LinearGradient", "FileManager", "Location", "Request", "Alert", "Timer", "args", "config", "Script", "Device", "Date", code.value);
+      await fn(ListWidget, DrawContext, Color, Font, Size, Point, Rect, Path, LinearGradient, FileManager, Location, Request, Alert, Timer, { widgetParameter: null }, config, Script, Device, SimDate);
+      if (id !== runId) return;
+      const w = set || presented || lastWidget;
+      if (!w) throw new Error("The script finished without making a widget. Make sure it calls Script.setWidget(widget).");
+      const [W, H] = $("device").value.split("x").map(Number);
+      host.replaceChildren(renderWidget(w, W, H, new Date(nowMs)));
+      fit(W, H);
+      const bits = [];
+      if (w.url) bits.push(`Tapping opens ${w.url}`);
+      bits.push(lastRequestUrl === "failed" ? "Weather lookup failed, so only the seasonal sky is shown" : lastRequestUrl ? "Weather looked up from Open-Meteo" : "No location or weather used");
+      if (w.refreshAfterDate) bits.push(`Asks iOS to refresh after ${new Date(+w.refreshAfterDate).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`);
+      $("meta").textContent = bits.join(". ") + (bits.length ? "." : "");
+      errBox.hidden = true;
+    } catch (e) {
+      if (id !== runId) return;
+      errBox.textContent = "Script error: " + (e && e.message ? e.message : String(e)) + ". The preview shows the last version that ran.";
+      errBox.hidden = false;
+    }
+  }
+
+  function fit(W, H) {
+    const avail = stage.clientWidth - 32;
+    const s = Math.min(1, avail / W);
+    scaler.style.transform = `scale(${s})`;
+    scaler.style.width = W + "px";
+    scaler.style.height = H + "px";
+    scaler.style.marginBottom = (H * s - H) + "px";
+    scaler.style.marginLeft = scaler.style.marginRight = ((W * s - W) / 2) + "px";
+  }
+
+  let t;
+  const debounced = () => { clearTimeout(t); t = setTimeout(run, 250); };
+  code.addEventListener("input", debounced);
+  slider.addEventListener("input", run);
+  hourSlider.addEventListener("input", run);
+  $("device").addEventListener("change", run);
+  window.addEventListener("resize", () => { const [W, H] = $("device").value.split("x").map(Number); fit(W, H); });
+
+  document.querySelectorAll("[data-jump]").forEach(b => b.addEventListener("click", () => {
+    const v = b.dataset.jump;
+    const d = v === "today" ? new Date() : new Date(...v.split("-").map((x, i) => i === 1 ? +x - 1 : +x));
+    slider.value = dayFor(d);
+    if (v === "today") hourSlider.value = nowHour();
+    run();
+  }));
+  document.querySelectorAll("button[data-mode]").forEach(b => b.addEventListener("click", () => {
+    MODE = b.dataset.mode;
+    stage.dataset.mode = MODE;
+    document.querySelectorAll("button[data-mode]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    run();
+  }));
+  let LOC_ON = false;
+  document.querySelectorAll("button[data-loc]").forEach(b => b.addEventListener("click", () => {
+    LOC_ON = b.dataset.loc === "on";
+    document.querySelectorAll("button[data-loc]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    $("weather").disabled = !LOC_ON;
+    run();
+  }));
+  $("weather").addEventListener("change", () => { WEATHER = $("weather").value; run(); });
+  $("copy").addEventListener("click", async () => {
+    const btn = $("copy");
+    try { await navigator.clipboard.writeText(code.value); btn.textContent = "Copied"; }
+    catch { code.focus(); code.select(); btn.textContent = "Selected, copy it now"; }
+    setTimeout(() => (btn.textContent = "Copy script"), 1800);
+  });
+  $("reset").addEventListener("click", () => { code.value = ORIGINAL; run(); });
+
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(run);
+  run();
+})();
+</script>
+</body>
+</html>
