@@ -153,6 +153,19 @@
             <button type="button" data-jump="2028-01-02">Quit day</button>
             <button type="button" data-jump="2028-02-14">Six weeks after</button>
           </div>
+          <div class="row" style="margin-top:8px">
+            <button type="button" data-jump="2027-10-02">Name day</button>
+            <button type="button" data-jump="2026-10-31">Halloween</button>
+            <button type="button" data-jump="2026-12-06">Mikulás</button>
+            <button type="button" data-jump="2026-12-24">Christmas</button>
+            <button type="button" data-jump="2026-12-31">New Year's Eve</button>
+            <button type="button" data-jump="2027-01-02">Birthday</button>
+            <button type="button" data-jump="2027-03-08">Nőnap</button>
+            <button type="button" data-jump="2027-03-15">15 March</button>
+            <button type="button" data-jump="2027-03-28">Easter</button>
+            <button type="button" data-jump="2027-08-20">20 August</button>
+            <button type="button" data-jump="2026-12-13">Advent</button>
+          </div>
         </div>
         <div>
           <label class="field-label" for="hour">Time <output id="hourOut"></output></label>
@@ -548,6 +561,278 @@ function drawMoon(ctx, W, H, kind) {
   }
 }
 
+// =====================================================================
+// Special days: a small decoration in the sky and a greeting in place of the title.
+// Change NAME or a greeting here; each occasion is one line.
+// =====================================================================
+const NAME = "Petra"
+
+// Easter Sunday for any year (the standard Gregorian calculation)
+function easterSunday(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(y, month - 1, day)
+}
+// The first Sunday of Advent: four Sundays before Christmas
+function firstAdvent(y) {
+  const xmas = new Date(y, 11, 25), dow = xmas.getDay()
+  return new Date(y, 11, 25 - (dow === 0 ? 7 : dow) - 21)
+}
+const daysBetween = (a, b) => Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / DAY)
+
+// text: the greeting (null for a decoration with no greeting that day)
+function occasionFor(d) {
+  const m = d.getMonth() + 1, day = d.getDate(), y = d.getFullYear()
+  if (m === 10 && day === 2)  return { key: "nameday",   text: `Boldog névnapot, ${NAME}!` }      // name day
+  if (m === 10 && day === 31) return { key: "halloween", text: "Boldog Halloweent!" }
+  if (m === 12 && day === 6)  return { key: "mikulas",   text: "Boldog Mikulást!" }               // St Nicholas
+  if (m === 12 && day >= 24 && day <= 26) return { key: "christmas", text: "Boldog karácsonyt!" }
+  if ((m === 12 && day === 31) || (m === 1 && day === 1)) return { key: "newyear", text: "Boldog új évet!" }
+  if (m === 1 && day === 2)   return { key: "birthday",  text: `Boldog születésnapot, ${NAME}!` }
+  if (m === 3 && day === 8)   return { key: "nonap",     text: "Boldog nőnapot!" }                // Women's Day
+  if (m === 3 && day === 15)  return { key: "march15",   text: "Nemzeti ünnep, március 15." }     // 1848 revolution
+  if (m === 8 && day === 20)  return { key: "stephen",   text: "Szent István napja" }             // St Stephen's Day
+  const easter = daysBetween(easterSunday(y), d)
+  if (easter === 0 || easter === 1) return { key: "easter", text: "Boldog húsvétot!" }           // Sunday and Monday
+  const advent = daysBetween(firstAdvent(y), d)
+  if (advent >= 0 && !(m === 12 && day > 23)) {                                                   // until Christmas Eve
+    // One more candle each Sunday; the greeting only on the Sundays themselves
+    return { key: "advent", candles: Math.min(4, 1 + Math.floor(advent / 7)), text: advent % 7 === 0 ? "Békés adventet!" : null }
+  }
+  return null
+}
+
+// Decorations stay in two clear areas of the widget: the strip of sky along the top right
+// (right of the title, above the cigarette) and the bottom-right corner (right of the day count).
+function wGlow(ctx, cx, cy, r, hex, alpha, rings) {
+  for (let i = rings; i >= 1; i--) {
+    const rr = r * i / rings
+    ctx.setFillColor(new Color(hex, alpha))
+    ctx.fillEllipse(new Rect(cx - rr, cy - rr, rr * 2, rr * 2))
+  }
+}
+function wRounded(ctx, x, y, w, h, r, hex) {
+  const p = new Path()
+  p.addRoundedRect(new Rect(x, y, w, h), r, r)
+  ctx.addPath(p)
+  ctx.setFillColor(new Color(hex))
+  ctx.fillPath()
+}
+function wPoly(ctx, pts, hex, alpha) {
+  const p = new Path()
+  p.addLines(pts.map(([x, y]) => new Point(x, y)))
+  p.closeSubpath()
+  ctx.addPath(p)
+  ctx.setFillColor(new Color(hex, alpha == null ? 1 : alpha))
+  ctx.fillPath()
+}
+
+function drawDecor(ctx, W, H, occ, isNight) {
+  if (!occ) return
+  const k = occ.key
+
+  if (k === "christmas") {
+    // A string of warm lights draped along the top edge
+    const span = 91, sag = 8
+    const yAt = x => 1 + sag * Math.sin(Math.PI * (((x % span) + span) % span) / span)
+    const wire = new Path()
+    const pts = []
+    for (let x = 0; x <= W; x += 4) pts.push(new Point(x, yAt(x)))
+    wire.addLines(pts)
+    ctx.addPath(wire)
+    ctx.setStrokeColor(new Color("#2f3236", 0.5))
+    ctx.setLineWidth(1)
+    ctx.strokePath()
+    const colors = ["#ffd36e", "#ff8a7a", "#8fd3a8", "#8ec5ff"]
+    let i = 0
+    for (let x = 11; x < W; x += 22.75, i++) {
+      const y = yAt(x) + 4, c = colors[i % 4]
+      wGlow(ctx, x, y, 8, c, 0.12, 3)
+      ctx.setFillColor(new Color(c))
+      ctx.fillEllipse(new Rect(x - 2.4, y - 3.2, 4.8, 6.4))
+    }
+  }
+
+  if (k === "halloween") {
+    // A pumpkin low in the corner, its carved face lit after dark, and a bat in the daytime sky
+    const cx = 330, cy = 152, s = 14
+    if (isNight) wGlow(ctx, cx, cy, s * 2.6, "#ff9a3c", 0.06, 6)
+    for (const [dx, hw, c] of [[-0.5, 0.5, "#c95f1c"], [0.5, 0.5, "#c95f1c"], [-0.2, 0.55, "#e07b2c"], [0.2, 0.55, "#e07b2c"], [0, 0.5, "#ec8a36"]]) {
+      ctx.setFillColor(new Color(c))
+      ctx.fillEllipse(new Rect(cx + dx * s - hw * s, cy - 0.8 * s, 2 * hw * s, 1.6 * s))
+    }
+    ctx.setFillColor(new Color("#5b6b3a"))
+    ctx.fillRect(new Rect(cx - 0.09 * s, cy - 1.05 * s, 0.18 * s, 0.32 * s))
+    if (isNight) {
+      const lit = "#ffd36e"
+      wPoly(ctx, [[cx - 0.5 * s, cy - 0.05 * s], [cx - 0.2 * s, cy - 0.05 * s], [cx - 0.35 * s, cy - 0.32 * s]], lit)
+      wPoly(ctx, [[cx + 0.2 * s, cy - 0.05 * s], [cx + 0.5 * s, cy - 0.05 * s], [cx + 0.35 * s, cy - 0.32 * s]], lit)
+      wPoly(ctx, [[cx - 0.5 * s, cy + 0.18 * s], [cx - 0.25 * s, cy + 0.32 * s], [cx, cy + 0.2 * s], [cx + 0.25 * s, cy + 0.32 * s], [cx + 0.5 * s, cy + 0.18 * s], [cx, cy + 0.5 * s]], lit)
+    } else {
+      const bx = 300, by = 20, bw = 11
+      const bat = new Path()
+      bat.move(new Point(bx, by))
+      bat.addQuadCurve(new Point(bx - bw, by - 3), new Point(bx - bw * 0.5, by - 6))
+      bat.addQuadCurve(new Point(bx - bw * 0.55, by + 1), new Point(bx - bw * 0.75, by + 2))
+      bat.addQuadCurve(new Point(bx - bw * 0.25, by + 2), new Point(bx - bw * 0.4, by + 4))
+      bat.addQuadCurve(new Point(bx, by + 3), new Point(bx - bw * 0.12, by + 5))
+      bat.addQuadCurve(new Point(bx + bw * 0.25, by + 2), new Point(bx + bw * 0.12, by + 5))
+      bat.addQuadCurve(new Point(bx + bw * 0.55, by + 1), new Point(bx + bw * 0.4, by + 4))
+      bat.addQuadCurve(new Point(bx + bw, by - 3), new Point(bx + bw * 0.75, by + 2))
+      bat.addQuadCurve(new Point(bx, by), new Point(bx + bw * 0.5, by - 6))
+      ctx.addPath(bat)
+      ctx.setFillColor(new Color("#14101a", 0.85))
+      ctx.fillPath()
+    }
+  }
+
+  if (k === "mikulas") {
+    // Mikulás leaves treats in a boot: a red boot in the corner with a gold sweet peeking out
+    const x = 328, y = 148, s = 16
+    ctx.setFillColor(new Color("#e9b949"))
+    ctx.fillEllipse(new Rect(x + 0.17 * s - 0.2 * s, y - 1.3 * s - 0.2 * s, 0.4 * s, 0.4 * s))
+    wRounded(ctx, x - 0.1 * s, y - 0.95 * s, 0.55 * s, 1.25 * s, 0.12 * s, "#c8323a")
+    wRounded(ctx, x - 0.75 * s, y + 0.05 * s, 1.2 * s, 0.42 * s, 0.2 * s, "#c8323a")
+    wRounded(ctx, x - 0.2 * s, y - 1.1 * s, 0.75 * s, 0.3 * s, 0.14 * s, "#fbf7f2")
+  }
+
+  // Fireworks: New Year's Eve night (until sunrise on the 1st), and the evening of 20 August in red, white and green
+  const nye = k === "newyear" && ((now.getMonth() === 11 && hourNow > sun.sunset) || (now.getMonth() === 0 && hourNow < sun.sunrise))
+  const stephenNight = k === "stephen" && hourNow > sun.sunset
+  if (nye || stephenNight) {
+    const cols = nye ? ["#ffd36e", "#ff9ab0", "#9fd8ff"] : ["#e8414b", "#ffffff", "#4caf6a"]
+    for (const [bx, by, r, ci] of [[262, 18, 13, 0], [306, 30, 16, 1], [346, 14, 11, 2]]) {
+      const c = cols[ci]
+      const rays = new Path()
+      for (let i = 0; i < 14; i++) {
+        const a = i / 14 * Math.PI * 2
+        rays.move(new Point(bx + Math.cos(a) * r * 0.35, by + Math.sin(a) * r * 0.35))
+        rays.addLine(new Point(bx + Math.cos(a) * r, by + Math.sin(a) * r))
+      }
+      ctx.addPath(rays)
+      ctx.setStrokeColor(new Color(c, 0.8))
+      ctx.setLineWidth(1.3)
+      ctx.strokePath()
+      wGlow(ctx, bx, by, r * 0.5, c, 0.08, 3)
+    }
+  }
+
+  if (k === "birthday") {
+    // Three balloons tied together in the top-right sky
+    const knotX = 322, knotY = 42
+    const strings = new Path()
+    for (const [bx, by] of [[300, 30], [322, 24], [344, 32]]) {
+      strings.move(new Point(bx, by))
+      strings.addQuadCurve(new Point(knotX, knotY), new Point((bx + knotX) / 2 + 2, (by + knotY) / 2))
+    }
+    ctx.addPath(strings)
+    ctx.setStrokeColor(new Color(isNight ? "#c9cfd8" : "#6b7480", 0.7))
+    ctx.setLineWidth(0.8)
+    ctx.strokePath()
+    for (const [bx, by, c] of [[300, 20, "#f28b82"], [344, 22, "#9ecbf0"], [322, 14, "#fbd36b"]]) {
+      ctx.setFillColor(new Color(c))
+      ctx.fillEllipse(new Rect(bx - 7, by - 9, 14, 18))
+      wPoly(ctx, [[bx - 2, by + 11], [bx + 2, by + 11], [bx, by + 8]], c)
+      ctx.setFillColor(new Color("#ffffff", 0.45))
+      ctx.fillEllipse(new Rect(bx - 4.5, by - 6, 3, 5))
+    }
+  }
+
+  if (k === "nameday" || k === "nonap") wBouquet(ctx)
+  if (k === "march15" || (k === "stephen" && !stephenNight)) wKokarda(ctx)
+
+  if (k === "easter") {
+    // Painted eggs (hímes tojás) in the corner
+    for (const [x, y, c, band] of [[312, 157, "#d94b4b", "#fbe3c8"], [341, 158, "#e9b949", "#d94b4b"], [327, 151, "#5b8fd6", "#fbf7f2"]]) {
+      ctx.setFillColor(new Color(c))
+      ctx.fillEllipse(new Rect(x - 7, y - 9.5, 14, 19))
+      const zig = new Path()
+      const pts = []
+      for (let i = 0; i <= 6; i++) pts.push(new Point(x - 6 + i * 2, y + (i % 2 ? -2 : 1)))
+      zig.addLines(pts)
+      ctx.addPath(zig)
+      ctx.setStrokeColor(new Color(band))
+      ctx.setLineWidth(1.4)
+      ctx.strokePath()
+      ctx.setFillColor(new Color(band))
+      for (const dx of [-3, 0, 3]) ctx.fillEllipse(new Rect(x + dx - 0.9, y - 5.5, 1.8, 1.8))
+    }
+  }
+
+  if (k === "advent") {
+    // An Advent wreath: three purple candles and one pink, one more lit each Sunday
+    const cx = 327, cy = 158
+    ctx.setFillColor(new Color("#3f6b3a"))
+    for (let i = 0; i < 24; i++) {
+      const a = i / 24 * Math.PI * 2
+      ctx.fillEllipse(new Rect(cx + Math.cos(a) * 18 - 5, cy + Math.sin(a) * 6.5 - 3, 10, 6))
+    }
+    ctx.setFillColor(new Color("#5d8f52"))
+    for (let i = 0; i < 24; i++) {
+      const a = (i + 0.5) / 24 * Math.PI * 2
+      ctx.fillEllipse(new Rect(cx + Math.cos(a) * 18 - 3.5, cy + Math.sin(a) * 6.5 - 2.5, 7, 5))
+    }
+    // lit in the order 1, 2, 3 (pink), 4
+    const candles = [[-13, -1, "#7b5aa6", 1], [-5, -5, "#7b5aa6", 2], [5, -5, "#e7a1c4", 3], [13, -1, "#7b5aa6", 4]]
+    for (const [dx, dy, c, n] of candles) {
+      const x = cx + dx, top = cy + dy - 15
+      wRounded(ctx, x - 2.2, top, 4.4, 15, 1.2, c)
+      if (n <= occ.candles) {
+        wGlow(ctx, x, top - 3.5, 7, "#ffd36e", 0.1, 3)
+        ctx.setFillColor(new Color("#ffd36e"))
+        ctx.fillEllipse(new Rect(x - 1.6, top - 6.5, 3.2, 5.5))
+      }
+    }
+  }
+}
+
+function wBouquet(ctx) {
+  // A small bouquet in the corner (name day and Women's Day)
+  const x = 328, y = 160, s = 16
+  const heads = [[-0.75, -1.3, "#f4a6c0"], [0, -1.65, "#fff4f0"], [0.75, -1.25, "#f7b38a"], [-0.3, -0.85, "#fff4f0"], [0.4, -0.8, "#f4a6c0"]]
+  const stems = new Path()
+  for (const [dx, dy] of heads) {
+    stems.move(new Point(x, y))
+    stems.addLine(new Point(x + dx * s, y + dy * s))
+  }
+  ctx.addPath(stems)
+  ctx.setStrokeColor(new Color("#5f8f57"))
+  ctx.setLineWidth(1.4)
+  ctx.strokePath()
+  ctx.setFillColor(new Color("#6fa86a"))
+  ctx.fillEllipse(new Rect(x - 0.9 * s, y - 0.75 * s, 0.6 * s, 0.32 * s))
+  ctx.fillEllipse(new Rect(x + 0.3 * s, y - 0.7 * s, 0.6 * s, 0.32 * s))
+  for (const [dx, dy, c] of heads) {
+    const fx = x + dx * s, fy = y + dy * s, pr = 0.22 * s
+    ctx.setFillColor(new Color(c))
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2 - Math.PI / 2
+      ctx.fillEllipse(new Rect(fx + Math.cos(a) * pr * 1.1 - pr, fy + Math.sin(a) * pr * 1.1 - pr, pr * 2, pr * 2))
+    }
+    ctx.setFillColor(new Color("#f6c453"))
+    ctx.fillEllipse(new Rect(fx - pr * 0.6, fy - pr * 0.6, pr * 1.2, pr * 1.2))
+  }
+  wRounded(ctx, x - 0.25 * s, y - 0.25 * s, 0.5 * s, 0.32 * s, 0.1 * s, "#f2c4d0")
+}
+
+function wKokarda(ctx) {
+  // A kokárda, the red-white-green rosette worn on Hungarian national days
+  const x = 328, y = 140
+  for (const [dir, base] of [[-1, 0], [1, 0]]) {
+    // two ribbon tails, each red, white and green
+    ["#ce2939", "#ffffff", "#477050"].forEach((c, i) => {
+      const off = (i - 1) * 2.2
+      wPoly(ctx, [[x + off, y + 4], [x + off + 2.2, y + 4], [x + dir * 9 + off + 2.2, y + 24], [x + dir * 9 + off, y + 24]], c)
+    })
+  }
+  ctx.setFillColor(new Color("#ce2939")); ctx.fillEllipse(new Rect(x - 11, y - 11, 22, 22))
+  ctx.setFillColor(new Color("#ffffff")); ctx.fillEllipse(new Rect(x - 7.5, y - 7.5, 15, 15))
+  ctx.setFillColor(new Color("#477050")); ctx.fillEllipse(new Rect(x - 4, y - 4, 8, 8))
+}
+
 // Widgets can't animate, so the sky, sun, moon and weather are drawn as a still scene behind everything
 function drawSky(top, bottom, kind, isNight) {
   const W = 364, H = 170
@@ -638,6 +923,8 @@ function drawSky(top, bottom, kind, isNight) {
     stroke(7, 0.2)     // glow
     stroke(2.2, 0.95)  // bolt
   }
+
+  drawDecor(ctx, W, H, occasionFor(now), isNight)
 
   if (kind === "snow") {
     for (let i = 0; i < 50; i++) {
@@ -776,9 +1063,13 @@ if (settings.locationModule && settings.lat != null) {
 }
 w.url = link
 
-const title = w.addText("Búcsú a cigitől")
+const occ = occasionFor(now)
+const greeting = occ && occ.text
+const title = w.addText(greeting || "Búcsú a cigitől")  // on special days, the greeting takes the title's place
 title.font = Font.semiboldRoundedSystemFont(14)
-title.textColor = C.muted
+title.textColor = greeting ? C.ink : C.muted
+title.lineLimit = 1
+title.minimumScaleFactor = 0.8
 
 w.addSpacer()
 
